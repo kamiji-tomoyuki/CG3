@@ -118,6 +118,23 @@ struct D3DResourceLeakChecker {
 	}
 };
 
+enum BlendMode {
+    // ブレンドなし
+    kBlendModeNone,
+    // 通常ロブレンド。デフォルト. Src + SrcA + Dest + (1 - SrcA)
+    kBlendModeNormal,
+    // 加算. Src * SrcA + Dest + 1
+    kBlendModeAdd,
+    // 減算. Dest + 1 - Src * SrcA
+    kBlendModeSubtract,
+    // 乗算, Src + 0 + Dest + Src
+    kBlendModeMultiply,
+    // スクリーン. Src * (1 - Dest) + Dest * 1
+    kBlendModeScreen,
+    // 利用してはいけない
+    kCountofBlendMode
+};
+
 /////////////////////////////////////////////////////////////////////////////
 
 void Log(const std::string& message);
@@ -783,6 +800,26 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
 	blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
 
+	//加算合成
+	blendDesc.RenderTarget[1].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	blendDesc.RenderTarget[1].BlendOp = D3D12_BLEND_OP_ADD;
+	blendDesc.RenderTarget[1].DestBlend = D3D12_BLEND_ONE;
+	
+	//減算合成
+	blendDesc.RenderTarget[2].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	blendDesc.RenderTarget[2].BlendOp = D3D12_BLEND_OP_REV_SUBTRACT;
+	blendDesc.RenderTarget[2].DestBlend = D3D12_BLEND_ONE;
+
+	//乗算合成
+	blendDesc.RenderTarget[3].SrcBlend = D3D12_BLEND_ZERO;
+	blendDesc.RenderTarget[3].BlendOp = D3D12_BLEND_OP_ADD;
+	blendDesc.RenderTarget[3].DestBlend = D3D12_BLEND_SRC_COLOR;
+
+	//スクリーン合成
+	blendDesc.RenderTarget[4].SrcBlend = D3D12_BLEND_INV_DEST_COLOR;
+	blendDesc.RenderTarget[4].BlendOp = D3D12_BLEND_OP_ADD;
+	blendDesc.RenderTarget[4].DestBlend = D3D12_BLEND_ONE;
+
 	// RasterizerStateの設定
 	D3D12_RASTERIZER_DESC rasterizerDesc{};
 	// 裏面(時計回り)を表示しない
@@ -1174,6 +1211,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 				ImGui::DragFloat3("UVTranslate", &uvTransformSprite.translate.x, 0.01f, -10.0f, 10.0f);
 				ImGui::DragFloat3("UVScale", &uvTransformSprite.scale.x, 0.01f, -10.0f, 10.0f);
 				ImGui::SliderAngle("UVRotate", &uvTransformSprite.rotate.z);
+				
 				ImGui::TreePop();
 			}
 			if (ImGui::TreeNode("Object")) {
