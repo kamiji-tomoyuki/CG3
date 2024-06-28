@@ -1021,7 +1021,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	//----- obj -----
 	// モデルの読み込み 
-	ModelData modelData = LoadObjFile("Resources/models", "axis.obj");
+	ModelData modelData = LoadObjFile("Resources/models", "fence.obj");
 	// 頂点リソースを作る
 	Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource = CreateBufferResource(device, sizeof(VertexData) * modelData.vertices.size());
 	// 頂点バッファビューを作成する
@@ -1129,13 +1129,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	//////////////////////////////////////////////////////////////////////////////////////////////
 
 	// Textureを読んで転送する
-	DirectX::ScratchImage mipImages = LoadTexture("Resources/Images/uvChecker.png");
+	DirectX::ScratchImage mipImages = LoadTexture("Resources/models/fence.png");
 	const DirectX::TexMetadata& metadata = mipImages.GetMetadata();
 	Microsoft::WRL::ComPtr<ID3D12Resource> textureResource = CreateTextureResources(device, metadata);
 	UploadTextureData(textureResource, mipImages);
 
 	// 2枚目のTextureを読んで転送する
-	DirectX::ScratchImage mipImages2 = LoadTexture(modelData.material.textureFilePath);
+	DirectX::ScratchImage mipImages2 = LoadTexture("Resources/Images/monsterBall.png");
 	const DirectX::TexMetadata& metadata2 = mipImages2.GetMetadata();
 	Microsoft::WRL::ComPtr<ID3D12Resource> textureResource2 = CreateTextureResources(device, metadata2);
 	UploadTextureData(textureResource2, mipImages2);
