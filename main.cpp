@@ -1167,6 +1167,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	device->CreateShaderResourceView(textureResource2.Get(), &srvDesc2, textureSrvHandleCPU2);
 
 	bool useMonsterBall = true;
+	transform.rotate.y = 3.0f;
 
 	MSG msg{};
 	// ウィンドウのxボタンが押されるまでループ
