@@ -1,4 +1,4 @@
-#include "Object3d.hlsli"
+#include "Particle.hlsli"
 
 struct Material
 {
@@ -14,7 +14,6 @@ struct DirectionalLight
     float3 direction; //ライトの向き
     float intensity; //輝度
 };
-ConstantBuffer<DirectionalLight> gDirectionalLight : register(b1);
 
 struct PixelShaderOutput
 {
@@ -26,19 +25,16 @@ SamplerState gSampler : register(s0);
 
 PixelShaderOutput main(VertexShaderOutput input)
 {
+    PixelShaderOutput output;
     float4 transformedUV = mul(float32_t4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
     float32_t4 textureColor = gTexture.Sample(gSampler, transformedUV.xy);
-    PixelShaderOutput output;
     
-    if (gMaterial.enableLighting != 0)//Lightingする場合
+    output.color = gMaterial.color * textureColor;
+    
+    //output.colorのα値が0のときにPixelを棄却
+    if (output.color.a == 0.0)
     {
-        float NdotL = dot(normalize(input.normal), normalize(-gDirectionalLight.direction));
-        float cos = pow(NdotL * 0.5f + 0.5f, 2.0f);
-        output.color = gMaterial.color * textureColor * gDirectionalLight.color * cos * gDirectionalLight.intensity;
-    }
-    else //Lightingしない場合
-    {
-        output.color = gMaterial.color * textureColor;
+        discard;
     }
     
     return output;
