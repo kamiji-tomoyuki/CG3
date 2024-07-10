@@ -134,6 +134,12 @@ enum BlendMode {
 struct Particle {
 	Transform transform;
 	Vector3 velocity;
+	Vector4 color;
+};
+struct ParticleForGPU {
+	Matrix4x4 WVP;
+	Matrix4x4 World;
+	Vector4 color;
 };
 
 /////////////////////////////////////////////////////////////////////////////
@@ -420,6 +426,8 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateDepthStencilTextureResource(Microso
 
 D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptorHandle(Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap, uint32_t descriptorSize, uint32_t index);
 D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap, uint32_t descriptorSize, uint32_t index);
+
+Particle MakeNewParticle(std::mt19937& randomEngine);
 
 ///////////////////////////////////////////////////////////
 
@@ -748,11 +756,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// WVP用のリソースを作る。
 	Microsoft::WRL::ComPtr<ID3D12Resource> wvpResource = CreateBufferResource(device, sizeof(TransformationMatrix));
 	// データを書き込む
-	TransformationMatrix* wvpData = nullptr;
+	ParticleForGPU* wvpData = nullptr;
 	// 書き込むためのアドレスを取得
 	wvpResource->Map(0, nullptr, reinterpret_cast<void**>(&wvpData));
 	// 単位行列を書き込んでおく
-	wvpData->world = MakeIdentity();
+	wvpData->World = MakeIdentity();
 	wvpData->WVP = MakeIdentity();
 
 	// WVP用のリソースを作る。
@@ -1059,16 +1067,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 	const uint32_t kNumInstance = 10;//インスタンス数
-	//Instancing用のTransformationMatrixリソースを作る
+	//Instancing用のリソースを作る
 	Microsoft::WRL::ComPtr<ID3D12Resource> instancingResource
-		= CreateBufferResource(device, sizeof(TransformationMatrix) * kNumInstance);
+		= CreateBufferResource(device, sizeof(ParticleForGPU) * kNumInstance);
 	//アドレスを取得
-	TransformationMatrix* instancingData = nullptr;
+	ParticleForGPU* instancingData = nullptr;
 	instancingResource->Map(0, nullptr, reinterpret_cast<void**>(&instancingData));
 	//単位行列の書き込み
 	for (uint32_t index = 0; index < kNumInstance; ++index) {
 		instancingData[index].WVP = MakeIdentity();
-		instancingData[index].world = MakeIdentity();
+		instancingData[index].World = MakeIdentity();
+		instancingData[index].color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 
 	//SRVの設定
@@ -1079,7 +1088,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	instancingSrvDesc.Buffer.FirstElement = 0;
 	instancingSrvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 	instancingSrvDesc.Buffer.NumElements = kNumInstance;
-	instancingSrvDesc.Buffer.StructureByteStride = sizeof(TransformationMatrix);
+	instancingSrvDesc.Buffer.StructureByteStride = sizeof(ParticleForGPU);
 	D3D12_CPU_DESCRIPTOR_HANDLE instancingSrvHandleCPU = GetCPUDescriptorHandle(srvDescriptorHeap, descriptorSizeSRV, 3);
 	D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandleGPU = GetGPUDescriptorHandle(srvDescriptorHeap, descriptorSizeSRV, 3);
 	device->CreateShaderResourceView(instancingResource.Get(), &instancingSrvDesc, instancingSrvHandleCPU);
@@ -1089,18 +1098,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	std::random_device seedGenerator;//乱数
 	std::mt19937 randomEngine(seedGenerator());
 	for (uint32_t index = 0; index < kNumInstance; ++index) {
-		particles[index].transform.scale = { 1.0f,1.0f,1.0f };
-		particles[index].transform.rotate = { 0.0f,DirectX::XM_PI,0.0f };
-		particles[index].transform.translate = { index * 0.1f,index * 0.1f, index * 0.1f };
-
-		//速度を上向きに設定
-		particles[index].velocity = { 0.0f,1.0f,0.0f };
-
-		//乱数
-		std::uniform_real_distribution<float> distribution(-1.0f, 1.0f);
-		particles[index].transform.translate = { distribution(randomEngine),distribution(randomEngine), distribution(randomEngine) };
-		particles[index].velocity = { distribution(randomEngine),distribution(randomEngine), distribution(randomEngine) };
-
+		particles[index] = MakeNewParticle(randomEngine);
 	}
 
 
@@ -1265,7 +1263,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 				Matrix4x4 worldMatrix = MakeAffineMatrix(particles[index].transform.scale, particles[index].transform.rotate, particles[index].transform.translate);
 				Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, viewProjectionMatrix);
 				instancingData[index].WVP = worldViewProjectionMatrix;
-				instancingData[index].world = worldMatrix;
+				instancingData[index].World = worldMatrix;
+				instancingData[index].color = particles[index].color;
 
 				//速度を反映
 				particles[index].transform.translate += particles[index].velocity * kDeltaTime;
@@ -1381,9 +1380,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			//SRV設定
 			commandList->SetGraphicsRootDescriptorTable(1, instancingSrvHandleGPU);
 
-
 			// 描画！(DrawCall/ドローコール)。3頂点で1つのインスタンス。
 			commandList->DrawInstanced(6, kNumInstance, 0, 0);
+
+
+
+
 
 			// Sprite
 			commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
@@ -1899,4 +1901,17 @@ D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(Microsoft::WRL::ComPtr<ID3D12
 	handleGPU.ptr += (descriptorSize * index);
 
 	return handleGPU;
+}
+
+Particle MakeNewParticle(std::mt19937& randomEngine)
+{
+	std::uniform_real_distribution<float> distribution(-1.0f, 1.0f);
+	Particle particle;
+	particle.transform.scale = { 1.0f, 1.0f, 1.0f };
+	particle.transform.rotate = { 0.0f, 0.0f, 0.0f };
+	particle.transform.translate = { distribution(randomEngine), distribution(randomEngine), distribution(randomEngine) };
+	particle.velocity = { distribution(randomEngine), distribution(randomEngine), distribution(randomEngine) };
+	std::uniform_real_distribution<float> distColor(0.0f, 1.0f);
+	particle.color = { distColor(randomEngine),distColor(randomEngine), distColor(randomEngine), 1.0f };
+	return particle;
 }
