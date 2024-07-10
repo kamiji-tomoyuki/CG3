@@ -34,10 +34,10 @@ struct Vector2 {
 	float y;
 };
 struct Vector4 {
-	float x;
-	float y;
-	float z;
-	float w;
+	float r;
+	float g;
+	float b;
+	float a;
 };
 
 struct Matrix3x3 {
@@ -135,6 +135,8 @@ struct Particle {
 	Transform transform;
 	Vector3 velocity;
 	Vector4 color;
+	float lifeTime;
+	float currentTime;
 };
 struct ParticleForGPU {
 	Matrix4x4 WVP;
@@ -813,17 +815,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// 全ての色要素を書き込む
 	blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 	blendDesc.RenderTarget[0].BlendEnable = TRUE;
-	blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-	blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-	blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-	blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-	blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-	blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
 
-	//加算合成
+	//ノーマル
 	blendDesc.RenderTarget[1].SrcBlend = D3D12_BLEND_SRC_ALPHA;
 	blendDesc.RenderTarget[1].BlendOp = D3D12_BLEND_OP_ADD;
-	blendDesc.RenderTarget[1].DestBlend = D3D12_BLEND_ONE;
+	blendDesc.RenderTarget[1].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+
+	//加算合成
+	blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+	blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
 
 	//減算合成
 	blendDesc.RenderTarget[2].SrcBlend = D3D12_BLEND_SRC_ALPHA;
@@ -840,6 +841,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	blendDesc.RenderTarget[4].BlendOp = D3D12_BLEND_OP_ADD;
 	blendDesc.RenderTarget[4].DestBlend = D3D12_BLEND_ONE;
 
+	
+
+	blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+	blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+
+	
 	// RasterizerStateの設定
 	D3D12_RASTERIZER_DESC rasterizerDesc{};
 	// 裏面(時計回り)を表示しない
@@ -868,7 +876,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	// Depthの機能を有効化
 	depthStencilDesc.DepthEnable = true;
 	// 書き込み
-	depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
 	// 比較関数はLessEqual。近ければ描画される
 	depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
 
@@ -1050,7 +1058,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	modelData.vertices.push_back({ .position = {1.0f,-1.0f,0.0f,1.0f},.texcoord = {0.0f,1.0f},.normal = {0.0f,0.0f,1.0f} });	//左下
 	modelData.vertices.push_back({ .position = {-1.0f,1.0f,0.0f,1.0f},.texcoord = {1.0f,0.0f},.normal = {0.0f,0.0f,1.0f} });	//右上
 	modelData.vertices.push_back({ .position = {-1.0f,-1.0f,0.0f,1.0f},.texcoord = {1.0f,1.0f},.normal = {0.0f,0.0f,1.0f} });	//右下
-	modelData.material.textureFilePath = "./Resources/images/uvChecker.png";
+	modelData.material.textureFilePath = "./Resources/images/circle.png";
 
 	// 頂点リソースを作る
 	Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource = CreateBufferResource(device, sizeof(VertexData) * modelData.vertices.size());
@@ -1066,15 +1074,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	std::memcpy(vertexData, modelData.vertices.data(), sizeof(VertexData) * modelData.vertices.size());
 
 
-	const uint32_t kNumInstance = 10;//インスタンス数
+	const uint32_t kNumMaxInstance = 10;//インスタンス数
 	//Instancing用のリソースを作る
 	Microsoft::WRL::ComPtr<ID3D12Resource> instancingResource
-		= CreateBufferResource(device, sizeof(ParticleForGPU) * kNumInstance);
+		= CreateBufferResource(device, sizeof(ParticleForGPU) * kNumMaxInstance);
 	//アドレスを取得
 	ParticleForGPU* instancingData = nullptr;
 	instancingResource->Map(0, nullptr, reinterpret_cast<void**>(&instancingData));
 	//単位行列の書き込み
-	for (uint32_t index = 0; index < kNumInstance; ++index) {
+	for (uint32_t index = 0; index < kNumMaxInstance; ++index) {
 		instancingData[index].WVP = MakeIdentity();
 		instancingData[index].World = MakeIdentity();
 		instancingData[index].color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -1087,17 +1095,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	instancingSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
 	instancingSrvDesc.Buffer.FirstElement = 0;
 	instancingSrvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
-	instancingSrvDesc.Buffer.NumElements = kNumInstance;
+	instancingSrvDesc.Buffer.NumElements = kNumMaxInstance;
 	instancingSrvDesc.Buffer.StructureByteStride = sizeof(ParticleForGPU);
 	D3D12_CPU_DESCRIPTOR_HANDLE instancingSrvHandleCPU = GetCPUDescriptorHandle(srvDescriptorHeap, descriptorSizeSRV, 3);
 	D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandleGPU = GetGPUDescriptorHandle(srvDescriptorHeap, descriptorSizeSRV, 3);
 	device->CreateShaderResourceView(instancingResource.Get(), &instancingSrvDesc, instancingSrvHandleCPU);
 
-	Particle particles[kNumInstance];
+	Particle particles[kNumMaxInstance];
 	const float kDeltaTime = 1.0f / 60.0f;
 	std::random_device seedGenerator;//乱数
 	std::mt19937 randomEngine(seedGenerator());
-	for (uint32_t index = 0; index < kNumInstance; ++index) {
+	for (uint32_t index = 0; index < kNumMaxInstance; ++index) {
 		particles[index] = MakeNewParticle(randomEngine);
 	}
 
@@ -1246,28 +1254,40 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			DispatchMessage(&msg);
 		}
 		else {
-			/*Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);*/
+			Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
 
 			Matrix4x4 cameraMatrix = MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate, cameraTransform.translate);
 			Matrix4x4 viewMatrix = Inverse(cameraMatrix);
 			Matrix4x4 projectionMatrix = MakePerspectiveFovMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
 			Matrix4x4 viewProjectionMatrix = Multiply(viewMatrix, projectionMatrix);
 
-			//// WVPMatrixを作る
-			//Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
-			//wvpData->world = worldViewProjectionMatrix;
-			//wvpData->WVP = worldViewProjectionMatrix;
+			// WVPMatrixを作る
+			Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
+			wvpData->World = worldViewProjectionMatrix;
+			wvpData->WVP = worldViewProjectionMatrix;
 
 			// Particle
-			for (uint32_t index = 0; index < kNumInstance; ++index) {
+			uint32_t numInstance = 0;
+			for (uint32_t index = 0; index < kNumMaxInstance; ++index) {
+				if (particles[index].lifeTime <= particles[index].currentTime) {
+					continue;
+				}
+				
 				Matrix4x4 worldMatrix = MakeAffineMatrix(particles[index].transform.scale, particles[index].transform.rotate, particles[index].transform.translate);
 				Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, viewProjectionMatrix);
+				
+				particles[index].transform.translate += particles[index].velocity * kDeltaTime;
+				particles[index].currentTime += kDeltaTime;
+
+				float alpha = 1.0f - (particles[index].currentTime / particles[index].lifeTime);
 				instancingData[index].WVP = worldViewProjectionMatrix;
 				instancingData[index].World = worldMatrix;
-				instancingData[index].color = particles[index].color;
+				instancingData[index].color.r = particles[index].color.r;
+				instancingData[index].color.g = particles[index].color.g;
+				instancingData[index].color.b = particles[index].color.b;
+				instancingData[numInstance].color.a = alpha;
 
-				//速度を反映
-				particles[index].transform.translate += particles[index].velocity * kDeltaTime;
+				++numInstance;
 			}
 
 
@@ -1289,12 +1309,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 				ImGui::TreePop();
 			}
 			if (ImGui::TreeNode("Light")) {
-				ImGui::ColorEdit4("color", &materialData->color.x);
+				ImGui::ColorEdit4("color", &materialData->color.r);
 				ImGui::Checkbox("enableLighting", &materialData->enableLighting);
 				ImGui::DragFloat3("LightDirection", &directionalLightData->direction.x, 0.01f);
 				directionalLightData->direction = Normalize(directionalLightData->direction);
 				ImGui::DragFloat("Intensity", &directionalLightData->intensity, 0.01f);
-				ImGui::ColorEdit4("LightColor", &directionalLightData->color.x);
+				ImGui::ColorEdit4("LightColor", &directionalLightData->color.r);
 				ImGui::TreePop();
 			}
 
@@ -1313,7 +1333,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 				ImGui::DragFloat3("Translate", &transform.translate.x, 0.01f);
 				ImGui::DragFloat3("Rotate", &transform.rotate.x, 0.01f);
 				ImGui::DragFloat3("Scale", &transform.scale.x, 0.01f);
-				ImGui::ColorEdit4("color", &materialData->color.x);
+				ImGui::ColorEdit4("color", &materialData->color.r);
 				ImGui::TreePop();
 			}
 
@@ -1381,7 +1401,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			commandList->SetGraphicsRootDescriptorTable(1, instancingSrvHandleGPU);
 
 			// 描画！(DrawCall/ドローコール)。3頂点で1つのインスタンス。
-			commandList->DrawInstanced(UINT(modelData.vertices.size()), kNumInstance, 0, 0);
+			commandList->DrawInstanced(UINT(modelData.vertices.size()), numInstance, 0, 0);
 
 
 
@@ -1683,9 +1703,9 @@ ModelData LoadObjFile(const std::string& directoryPath, const std::string& filen
 
 		if (identifier == "v") {
 			Vector4 position;
-			s >> position.x >> position.y >> position.z;
-			position.x *= -1.0f;
-			position.w = 1.0f;
+			s >> position.r >> position.g >> position.b;
+			position.r *= -1.0f;
+			position.a = 1.0f;
 			positions.push_back(position);
 		}
 		else if (identifier == "vt") {
@@ -1908,10 +1928,16 @@ Particle MakeNewParticle(std::mt19937& randomEngine)
 	std::uniform_real_distribution<float> distribution(-1.0f, 1.0f);
 	Particle particle;
 	particle.transform.scale = { 1.0f, 1.0f, 1.0f };
-	particle.transform.rotate = { 0.0f, 0.0f, 0.0f };
+	particle.transform.rotate = { 0.0f, DirectX::XM_PI, 0.0f };
 	particle.transform.translate = { distribution(randomEngine), distribution(randomEngine), distribution(randomEngine) };
 	particle.velocity = { distribution(randomEngine), distribution(randomEngine), distribution(randomEngine) };
+	
 	std::uniform_real_distribution<float> distColor(0.0f, 1.0f);
 	particle.color = { distColor(randomEngine),distColor(randomEngine), distColor(randomEngine), 1.0f };
+	
+	std::uniform_real_distribution<float> distTime(1.0f, 3.0f);
+	particle.lifeTime = distTime(randomEngine);
+	particle.currentTime = 0;
+	
 	return particle;
 }
