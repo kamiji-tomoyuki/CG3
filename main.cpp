@@ -8,9 +8,13 @@
 #include <dxgidebug.h>
 #include <format>
 #include <fstream>
+#include <random>
 #include <sstream>
 #include <string>
 #include <wrl.h>
+
+#include "math/Vector3.h"
+#include "math/Matrix4x4.h"
 
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/imgui_impl_dx12.h"
@@ -29,11 +33,6 @@ struct Vector2 {
 	float x;
 	float y;
 };
-struct Vector3 {
-	float x;
-	float y;
-	float z;
-};
 struct Vector4 {
 	float x;
 	float y;
@@ -43,9 +42,6 @@ struct Vector4 {
 
 struct Matrix3x3 {
 	float m[3][3];
-};
-struct Matrix4x4 {
-	float m[4][4];
 };
 
 struct Transform {
@@ -133,6 +129,11 @@ enum BlendMode {
 	kBlendModeScreen,
 	// 利用してはいけない
 	kCountofBlendMode
+};
+
+struct Particle {
+	Transform transform;
+	Vector3 velocity;
 };
 
 /////////////////////////////////////////////////////////////////////////////
@@ -1083,12 +1084,20 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandleGPU = GetGPUDescriptorHandle(srvDescriptorHeap, descriptorSizeSRV, 3);
 	device->CreateShaderResourceView(instancingResource.Get(), &instancingSrvDesc, instancingSrvHandleCPU);
 
-	Transform transforms[kNumInstance];
+	Particle particles[kNumInstance];
+	const float kDeltaTime = 1.0f / 60.0f;
 	for (uint32_t index = 0; index < kNumInstance; ++index) {
-		transforms[index].scale = { 1.0f,1.0f,1.0f };
-		transforms[index].rotate = { 0.0f,DirectX::XM_PI,0.0f };
-		transforms[index].translate = { index * 0.1f,index * 0.1f, index * 0.1f };
+		particles[index].transform.scale = { 1.0f,1.0f,1.0f };
+		particles[index].transform.rotate = { 0.0f,DirectX::XM_PI,0.0f };
+		particles[index].transform.translate = { index * 0.1f,index * 0.1f, index * 0.1f };
+	
+		//速度を上向きに設定
+		particles[index].velocity = { 0.0f,1.0f,0.0f };
 	}
+
+	//
+
+
 
 	// ----- Sprite -----
 	// Sprite用の頂点リソースを作る
@@ -1222,7 +1231,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	device->CreateShaderResourceView(textureResource2.Get(), &srvDesc2, textureSrvHandleCPU2);
 
 	bool useMonsterBall = true;
-	transform.rotate.y = 3.0f;
 
 	MSG msg{};
 	// ウィンドウのxボタンが押されるまでループ
@@ -1247,10 +1255,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 			// Particle
 			for (uint32_t index = 0; index < kNumInstance; ++index) {
-				Matrix4x4 worldMatrix = MakeAffineMatrix(transforms[index].scale, transforms[index].rotate, transforms[index].translate);
+				Matrix4x4 worldMatrix = MakeAffineMatrix(particles[index].transform.scale, particles[index].transform.rotate, particles[index].transform.translate);
 				Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, viewProjectionMatrix);
 				instancingData[index].WVP = worldViewProjectionMatrix;
 				instancingData[index].world = worldMatrix;
+
+				//速度を反映
+				particles[index].transform.translate += particles[index].velocity * kDeltaTime;
 			}
 
 
