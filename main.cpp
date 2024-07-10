@@ -1086,16 +1086,23 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	Particle particles[kNumInstance];
 	const float kDeltaTime = 1.0f / 60.0f;
+	std::random_device seedGenerator;//乱数
+	std::mt19937 randomEngine(seedGenerator());
 	for (uint32_t index = 0; index < kNumInstance; ++index) {
 		particles[index].transform.scale = { 1.0f,1.0f,1.0f };
 		particles[index].transform.rotate = { 0.0f,DirectX::XM_PI,0.0f };
 		particles[index].transform.translate = { index * 0.1f,index * 0.1f, index * 0.1f };
-	
+
 		//速度を上向きに設定
 		particles[index].velocity = { 0.0f,1.0f,0.0f };
+
+		//乱数
+		std::uniform_real_distribution<float> distribution(-1.0f, 1.0f);
+		particles[index].transform.translate = { distribution(randomEngine),distribution(randomEngine), distribution(randomEngine) };
+		particles[index].velocity = { distribution(randomEngine),distribution(randomEngine), distribution(randomEngine) };
+
 	}
 
-	//
 
 
 
