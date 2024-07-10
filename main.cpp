@@ -1086,8 +1086,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	Transform transforms[kNumInstance];
 	for (uint32_t index = 0; index < kNumInstance; ++index) {
 		transforms[index].scale = { 1.0f,1.0f,1.0f };
-		transforms[index].rotate = { 0.0f,0.0f,0.0f };
-		transforms[index].translate = { index * 0.01f,index * 0.01f, index * 0.01f };
+		transforms[index].rotate = { 0.0f,DirectX::XM_PI,0.0f };
+		transforms[index].translate = { index * 0.1f,index * 0.1f, index * 0.1f };
 	}
 
 	// ----- Sprite -----
@@ -1233,22 +1233,22 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			DispatchMessage(&msg);
 		}
 		else {
-			Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
+			/*Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);*/
 
 			Matrix4x4 cameraMatrix = MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate, cameraTransform.translate);
 			Matrix4x4 viewMatrix = Inverse(cameraMatrix);
 			Matrix4x4 projectionMatrix = MakePerspectiveFovMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
 			Matrix4x4 viewProjectionMatrix = Multiply(viewMatrix, projectionMatrix);
 
-			// WVPMatrixを作る
-			Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
-			wvpData->world = worldViewProjectionMatrix;
-			wvpData->WVP = worldViewProjectionMatrix;
+			//// WVPMatrixを作る
+			//Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
+			//wvpData->world = worldViewProjectionMatrix;
+			//wvpData->WVP = worldViewProjectionMatrix;
 
 			// Particle
 			for (uint32_t index = 0; index < kNumInstance; ++index) {
 				Matrix4x4 worldMatrix = MakeAffineMatrix(transforms[index].scale, transforms[index].rotate, transforms[index].translate);
-				Matrix4x4 worldViewPortMatrix = Multiply(worldMatrix, viewProjectionMatrix);
+				Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, viewProjectionMatrix);
 				instancingData[index].WVP = worldViewProjectionMatrix;
 				instancingData[index].world = worldMatrix;
 			}
@@ -1350,8 +1350,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 			commandList->IASetIndexBuffer(&indexBufferView);
 
-			// wvp用のCBufferの場所を設定
-			commandList->SetGraphicsRootConstantBufferView(1, wvpResource->GetGPUVirtualAddress());
+			//// wvp用のCBufferの場所を設定
+			//commandList->SetGraphicsRootConstantBufferView(1, wvpResource->GetGPUVirtualAddress());
 
 			commandList->SetGraphicsRootDescriptorTable(2, useMonsterBall ? textureSrvHandleGPU2 : textureSrvHandleGPU);
 			commandList->SetGraphicsRootConstantBufferView(3, directionalLightResource->GetGPUVirtualAddress());
@@ -1365,9 +1365,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 			// 描画！(DrawCall/ドローコール)。3頂点で1つのインスタンス。
-			commandList->DrawIndexedInstanced(6, 1, 0, 0, 0);
-			UINT instanceCount = 10;
-			commandList->DrawInstanced(UINT(modelData.vertices.size()), instanceCount, 0, 0);
+			commandList->DrawInstanced(6, kNumInstance, 0, 0);
 
 			// Sprite
 			commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
@@ -1384,8 +1382,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			// Spriteの描画
 			commandList->IASetIndexBuffer(&indexBufferViewSprite);          // IBVを設定
 			commandList->IASetVertexBuffers(0, 1, &vertexBufferViewSprite); // VBVを設定
-			// TransformMatrixCBufferの場所を設定
-			commandList->SetGraphicsRootConstantBufferView(1, transformationMatrixResourceSprite->GetGPUVirtualAddress());
+			//// TransformMatrixCBufferの場所を設定
+			//commandList->SetGraphicsRootConstantBufferView(1, transformationMatrixResourceSprite->GetGPUVirtualAddress());
 			// 描画
 			// commandList->DrawIndexedInstanced(6, 1, 0, 0, 0);
 
