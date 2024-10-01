@@ -8,6 +8,7 @@
 #include <dxgidebug.h>
 #include <format>
 #include <fstream>
+#include <numbers>
 #include <random>
 #include <sstream>
 #include <string>
@@ -841,13 +842,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	blendDesc.RenderTarget[4].BlendOp = D3D12_BLEND_OP_ADD;
 	blendDesc.RenderTarget[4].DestBlend = D3D12_BLEND_ONE;
 
-	
+
 
 	blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
 	blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
 	blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
 
-	
+
 	// RasterizerStateの設定
 	D3D12_RASTERIZER_DESC rasterizerDesc{};
 	// 裏面(時計回り)を表示しない
@@ -1254,17 +1255,22 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			DispatchMessage(&msg);
 		}
 		else {
-			Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
+			////particle
+			//Matrix4x4 backTofrontMatrix = MakeRotateYMatrix(std::numbers::pi_v<float>);
+			//Matrix4x4 billboardMatrix = Multiply(backTofrontMatrix, cameraMatrix);
+			//billboardMatrix.m[3][0] = 0.0f;
+			//billboardMatrix.m[3][1] = 0.0f;
+			//billboardMatrix.m[3][2] = 0.0f;
 
-			Matrix4x4 cameraMatrix = MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate, cameraTransform.translate);
-			Matrix4x4 viewMatrix = Inverse(cameraMatrix);
-			Matrix4x4 projectionMatrix = MakePerspectiveFovMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
-			Matrix4x4 viewProjectionMatrix = Multiply(viewMatrix, projectionMatrix);
+			//Matrix4x4 scaleMatrix = MakeScaleMatrix(transform.scale);
+			//Matrix4x4 translateMatrix = MakeTranslateMatrix(transform.translate);
 
-			// WVPMatrixを作る
-			Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
-			wvpData->World = worldViewProjectionMatrix;
-			wvpData->WVP = worldViewProjectionMatrix;
+			//Matrix4x4 worldMatrix = scaleMatrix * billboardMatrix * translateMatrix;
+
+			//// WVPMatrixを作る
+			//Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
+			//wvpData->World = worldViewProjectionMatrix;
+			//wvpData->WVP = worldViewProjectionMatrix;
 
 			// Particle
 			uint32_t numInstance = 0;
@@ -1272,12 +1278,25 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 				if (particles[index].lifeTime <= particles[index].currentTime) {
 					continue;
 				}
-				
-				Matrix4x4 worldMatrix = MakeAffineMatrix(particles[index].transform.scale, particles[index].transform.rotate, particles[index].transform.translate);
+				Matrix4x4 cameraMatrix = MakeAffineMatrix(cameraTransform.scale, cameraTransform.rotate, cameraTransform.translate);
+				Matrix4x4 viewMatrix = Inverse(cameraMatrix);
+				Matrix4x4 projectionMatrix = MakePerspectiveFovMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
+				Matrix4x4 viewProjectionMatrix = Multiply(viewMatrix, projectionMatrix);
+
+				Matrix4x4 backTofrontMatrix = MakeRotateYMatrix(std::numbers::pi_v<float>);
+				Matrix4x4 billboardMatrix = Multiply(backTofrontMatrix, cameraMatrix);
+				billboardMatrix.m[3][0] = 0.0f;
+				billboardMatrix.m[3][1] = 0.0f;
+				billboardMatrix.m[3][2] = 0.0f;
+
+				Matrix4x4 scaleMatrix = MakeScaleMatrix(particles[index].transform.scale);
+				Matrix4x4 translateMatrix = MakeTranslateMatrix(particles[index].transform.translate);
+
+				Matrix4x4 worldMatrix = scaleMatrix * billboardMatrix * translateMatrix;
 				Matrix4x4 worldViewProjectionMatrix = Multiply(worldMatrix, viewProjectionMatrix);
-				
-				particles[index].transform.translate += particles[index].velocity * kDeltaTime;
-				particles[index].currentTime += kDeltaTime;
+
+				//particles[index].transform.translate += particles[index].velocity * kDeltaTime;
+				//particles[index].currentTime += kDeltaTime;
 
 				instancingData[numInstance].WVP = worldViewProjectionMatrix;
 				instancingData[numInstance].World = worldMatrix;
@@ -1929,13 +1948,13 @@ Particle MakeNewParticle(std::mt19937& randomEngine)
 	particle.transform.rotate = { 0.0f, DirectX::XM_PI, 0.0f };
 	particle.transform.translate = { distribution(randomEngine), distribution(randomEngine), distribution(randomEngine) };
 	particle.velocity = { distribution(randomEngine), distribution(randomEngine), distribution(randomEngine) };
-	
+
 	std::uniform_real_distribution<float> distColor(0.0f, 1.0f);
 	particle.color = { distColor(randomEngine),distColor(randomEngine), distColor(randomEngine), 1.0f };
-	
+
 	std::uniform_real_distribution<float> distTime(1.0f, 3.0f);
 	particle.lifeTime = distTime(randomEngine);
 	particle.currentTime = 0;
-	
+
 	return particle;
 }
