@@ -1279,11 +1279,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 				particles[index].transform.translate += particles[index].velocity * kDeltaTime;
 				particles[index].currentTime += kDeltaTime;
 
-				instancingData[index].WVP = worldViewProjectionMatrix;
-				instancingData[index].World = worldMatrix;
-				instancingData[index].color.r = particles[index].color.r;
-				instancingData[index].color.g = particles[index].color.g;
-				instancingData[index].color.b = particles[index].color.b;
+				instancingData[numInstance].WVP = worldViewProjectionMatrix;
+				instancingData[numInstance].World = worldMatrix;
+				instancingData[numInstance].color = particles[index].color;
 				float alpha = 1.0f - (particles[index].currentTime / particles[index].lifeTime);
 				instancingData[numInstance].color.a = alpha;
 
